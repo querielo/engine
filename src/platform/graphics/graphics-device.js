@@ -2,9 +2,12 @@ import { Debug } from '../../core/debug.js';
 import { EventHandler } from '../../core/event-handler.js';
 import { platform } from '../../core/platform.js';
 import { now } from '../../core/time.js';
+import { BlendState } from './blend-state.js';
 
 import {
     BUFFER_STATIC,
+    CLEARFLAG_COLOR,
+    CLEARFLAG_DEPTH,
     PRIMITIVE_POINTS, PRIMITIVE_TRIFAN, SEMANTIC_POSITION, TYPE_FLOAT32
 } from './constants.js';
 import { ScopeSpace } from './scope-space.js';
@@ -134,6 +137,20 @@ class GraphicsDevice extends EventHandler {
      */
     quadVertexBuffer;
 
+    /**
+     * An object representing current blend state
+     *
+     * @ignore
+     */
+    blendState = new BlendState();
+
+    defaultClearOptions = {
+        color: [0, 0, 0, 1],
+        depth: 1,
+        stencil: 0,
+        flags: CLEARFLAG_COLOR | CLEARFLAG_DEPTH
+    };
+
     constructor(canvas) {
         super();
 
@@ -259,9 +276,21 @@ class GraphicsDevice extends EventHandler {
     }
 
     initializeRenderState() {
+
+        this.blendState = new BlendState();
+
         // Cached viewport and scissor dimensions
         this.vx = this.vy = this.vw = this.vh = 0;
         this.sx = this.sy = this.sw = this.sh = 0;
+    }
+
+    /**
+     * Sets the specified blend state.
+     *
+     * @param {BlendState} blendState - New blend state.
+     */
+    setBlendState(blendState) {
+        Debug.assert(false);
     }
 
     /**

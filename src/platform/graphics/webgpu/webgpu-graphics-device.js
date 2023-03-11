@@ -10,7 +10,6 @@ import { WebgpuBindGroup } from './webgpu-bind-group.js';
 import { WebgpuBindGroupFormat } from './webgpu-bind-group-format.js';
 import { WebgpuIndexBuffer } from './webgpu-index-buffer.js';
 import { WebgpuRenderPipeline } from './webgpu-render-pipeline.js';
-import { WebgpuRenderState } from './webgpu-render-state.js';
 import { WebgpuRenderTarget } from './webgpu-render-target.js';
 import { WebgpuShader } from './webgpu-shader.js';
 import { WebgpuTexture } from './webgpu-texture.js';
@@ -28,21 +27,16 @@ class WebgpuGraphicsDevice extends GraphicsDevice {
     frameBuffer;
 
     /**
-     * Internal representation of the current render state, as requested by the renderer.
-     * In the future this can be completely replaced by a more optimal solution, where
-     * render states are bundled together (DX11 style) and set using a single call.
-     */
-    renderState = new WebgpuRenderState();
-
-    /**
      * Object responsible for caching and creation of render pipelines.
      */
     renderPipeline = new WebgpuRenderPipeline(this);
 
     /**
      * Object responsible for clearing the rendering surface by rendering a quad.
+     *
+     * @type { WebgpuClearRenderer }
      */
-    clearRenderer = new WebgpuClearRenderer();
+    clearRenderer;
 
     /**
      * Render pipeline currently set on the device.
@@ -70,12 +64,6 @@ class WebgpuGraphicsDevice extends GraphicsDevice {
     constructor(canvas, options = {}) {
         super(canvas);
         this.isWebGPU = true;
-
-        // TODO: refactor as needed
-        this.writeRed = true;
-        this.writeGreen = true;
-        this.writeBlue = true;
-        this.writeAlpha = true;
 
         this.initDeviceCaps();
     }
@@ -111,6 +99,7 @@ class WebgpuGraphicsDevice extends GraphicsDevice {
         this.boneLimit = 1024;
         this.supportsImageBitmap = true;
         this.extStandardDerivatives = true;
+        this.extBlendMinmax = true;
         this.areaLightLutFormat = PIXELFORMAT_RGBA32F;
         this.supportsTextureFetch = true;
     }
@@ -192,6 +181,8 @@ class WebgpuGraphicsDevice extends GraphicsDevice {
         this.gpuContext.configure(this.canvasConfig);
 
         this.createFramebuffer();
+
+        this.clearRenderer = new WebgpuClearRenderer(this);
 
         this.postInit();
 
@@ -277,16 +268,18 @@ class WebgpuGraphicsDevice extends GraphicsDevice {
 
             // vertex buffers
             const vb0 = this.vertexBuffers[0];
-            const vbSlot = this.submitVertexBuffer(vb0, 0);
             const vb1 = this.vertexBuffers[1];
-            if (vb1) {
-                this.submitVertexBuffer(vb1, vbSlot);
+            if (vb0) {
+                const vbSlot = this.submitVertexBuffer(vb0, 0);
+                if (vb1) {
+                    this.submitVertexBuffer(vb1, vbSlot);
+                }
             }
             this.vertexBuffers.length = 0;
 
             // render pipeline
-            const pipeline = this.renderPipeline.get(primitive, vb0.format, vb1?.format, this.shader, this.renderTarget,
-                                                     this.bindGroupFormats, this.renderState);
+            const pipeline = this.renderPipeline.get(primitive, vb0?.format, vb1?.format, this.shader, this.renderTarget,
+                                                     this.bindGroupFormats, this.blendState);
             Debug.assert(pipeline);
 
             if (this.pipeline !== pipeline) {
@@ -299,9 +292,9 @@ class WebgpuGraphicsDevice extends GraphicsDevice {
             if (ib) {
                 this.indexBuffer = null;
                 passEncoder.setIndexBuffer(ib.impl.buffer, ib.impl.format);
-                passEncoder.drawIndexed(ib.numIndices, numInstances, 0, 0, 0);
+                passEncoder.drawIndexed(primitive.count, numInstances, 0, 0, 0);
             } else {
-                passEncoder.draw(vb0.numVertices, numInstances, 0, 0);
+                passEncoder.draw(primitive.count, numInstances, 0, 0);
             }
         }
     }
@@ -318,16 +311,12 @@ class WebgpuGraphicsDevice extends GraphicsDevice {
         return true;
     }
 
-    setBlending(blending) {
-        this.renderState.setBlending(blending);
+    setBlendState(blendState) {
+        this.blendState.copy(blendState);
     }
 
-    setBlendFunction(blendSrc, blendDst) {
-        this.renderState.setBlendFunction(blendSrc, blendDst);
-    }
-
-    setBlendEquation(blendEquation) {
-        this.renderState.setBlendEquation(blendEquation);
+    setBlendColor(r, g, b, a) {
+        // TODO: this should use passEncoder.setBlendConstant(color)
     }
 
     setDepthFunc(func) {
@@ -348,9 +337,6 @@ class WebgpuGraphicsDevice extends GraphicsDevice {
     }
 
     setAlphaToCoverage(state) {
-    }
-
-    setColorWrite(writeRed, writeGreen, writeBlue, writeAlpha) {
     }
 
     setDepthWrite(writeDepth) {
@@ -444,7 +430,7 @@ class WebgpuGraphicsDevice extends GraphicsDevice {
 
     clear(options) {
         if (options.flags) {
-            this.clearRenderer.clear(this, this.renderTarget, options);
+            this.clearRenderer.clear(this, this.renderTarget, options, this.defaultClearOptions);
         }
     }
 
@@ -477,12 +463,16 @@ class WebgpuGraphicsDevice extends GraphicsDevice {
         // TODO: this condition should be removed, it's here to handle fake grab pass, which should be refactored instead
         if (this.passEncoder) {
 
+            if (!this.renderTarget.flipY) {
+                y = this.renderTarget.height - y - h;
+            }
+
             this.vx = x;
             this.vy = y;
             this.vw = w;
             this.vh = h;
 
-            this.passEncoder.setViewport(x, this.renderTarget.height - y - h, w, h, 0, 1);
+            this.passEncoder.setViewport(x, y, w, h, 0, 1);
         }
     }
 
@@ -492,12 +482,16 @@ class WebgpuGraphicsDevice extends GraphicsDevice {
         // TODO: this condition should be removed, it's here to handle fake grab pass, which should be refactored instead
         if (this.passEncoder) {
 
+            if (!this.renderTarget.flipY) {
+                y = this.renderTarget.height - y - h;
+            }
+
             this.sx = x;
             this.sy = y;
             this.sw = w;
             this.sh = h;
 
-            this.passEncoder.setScissorRect(x, this.renderTarget.height - y - h, w, h);
+            this.passEncoder.setScissorRect(x, y, w, h);
         }
     }
 
