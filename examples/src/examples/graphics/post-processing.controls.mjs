@@ -18,7 +18,11 @@ export const controls = ({ observer, ReactPCUI, React, jsx, fragment }) => {
         ),
         jsx(
             Panel,
-            { headerText: 'Scene Rendering' },
+            {
+                headerText: 'Scene Rendering',
+                collapsible: true,
+                collapsed: false
+            },
             jsx(
                 LabelGroup,
                 { text: 'resolution' },
@@ -87,7 +91,11 @@ export const controls = ({ observer, ReactPCUI, React, jsx, fragment }) => {
         ),
         jsx(
             Panel,
-            { headerText: 'BLOOM' },
+            {
+                headerText: 'BLOOM',
+                collapsible: true,
+                collapsed: false
+            },
             jsx(
                 LabelGroup,
                 { text: 'enabled' },
@@ -122,7 +130,11 @@ export const controls = ({ observer, ReactPCUI, React, jsx, fragment }) => {
         ),
         jsx(
             Panel,
-            { headerText: 'Grading' },
+            {
+                headerText: 'Grading',
+                collapsible: true,
+                collapsed: true
+            },
             jsx(
                 LabelGroup,
                 { text: 'enabled' },
@@ -168,7 +180,11 @@ export const controls = ({ observer, ReactPCUI, React, jsx, fragment }) => {
         ),
         jsx(
             Panel,
-            { headerText: 'Vignette' },
+            {
+                headerText: 'Vignette',
+                collapsible: true,
+                collapsed: true
+            },
             jsx(
                 LabelGroup,
                 { text: 'enabled' },
@@ -225,7 +241,11 @@ export const controls = ({ observer, ReactPCUI, React, jsx, fragment }) => {
         ),
         jsx(
             Panel,
-            { headerText: 'Fringing' },
+            {
+                headerText: 'Fringing',
+                collapsible: true,
+                collapsed: true
+            },
             jsx(
                 LabelGroup,
                 { text: 'enabled' },
@@ -249,7 +269,11 @@ export const controls = ({ observer, ReactPCUI, React, jsx, fragment }) => {
         ),
         jsx(
             Panel,
-            { headerText: 'TAA (Work in Progress)' },
+            {
+                headerText: 'TAA (Work in Progress)',
+                collapsible: true,
+                collapsed: false
+            },
             jsx(
                 LabelGroup,
                 { text: 'enabled' },
@@ -267,6 +291,17 @@ export const controls = ({ observer, ReactPCUI, React, jsx, fragment }) => {
                     link: { observer, path: 'data.taa.jitter' },
                     min: 0,
                     max: 1,
+                    precision: 2
+                })
+            ),
+            jsx(
+                LabelGroup,
+                { text: 'stability' },
+                jsx(SliderInput, {
+                    binding: new BindingTwoWay(),
+                    link: { observer, path: 'data.taa.stability' },
+                    min: 0,
+                    max: 10,
                     precision: 2
                 })
             )

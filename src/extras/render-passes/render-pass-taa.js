@@ -16,6 +16,7 @@ const fs = /* glsl */ `
     uniform mat4 matrix_viewProjectionInverse;
     uniform vec4 jitters;   // xy: current frame, zw: previous frame
     uniform vec2 textureSize;
+    uniform float stability;
 
     varying vec2 uv0;
 
@@ -33,7 +34,7 @@ const fs = /* glsl */ `
         // Transform NDC to world space of the current frame
         vec4 worldPosition = matrix_viewProjectionInverse * ndc;
         worldPosition /= worldPosition.w;
-    
+
         // world position to screen space of the previous frame
         vec4 screenPrevious = matrix_viewProjectionPrevious * worldPosition;
 
@@ -45,7 +46,7 @@ const fs = /* glsl */ `
         // out of range numbers
         vec3 minColor = vec3(9999.0);
         vec3 maxColor = vec3(-9999.0);
- 
+
         // sample a 3x3 neighborhood to create a box in color space
         for(float x = -1.0; x <= 1.0; ++x)
         {
@@ -56,7 +57,7 @@ const fs = /* glsl */ `
                 maxColor = max(maxColor, color);
             }
         }
- 
+
         // clamp the history color to min/max bounding box
         vec3 clamped = clamp(historyColor.rgb, minColor, maxColor);
         return vec4(clamped, historyColor.a);
@@ -99,9 +100,17 @@ const fs = /* glsl */ `
         // handle disocclusion by clamping the history color
         vec4 historyColorClamped = colorClamp(uv, historyColor);
 
-        // handle history buffer outside of the frame
-        float mixFactor = (historyUv.x < 0.0 || historyUv.x > 1.0 || historyUv.y < 0.0 || historyUv.y > 1.0) ?
+        // Calculate a blend factor based on multiple components
+        float outOfBoundsMix = (historyUv.x < 0.0 || historyUv.x > 1.0 || historyUv.y < 0.0 || historyUv.y > 1.0) ?
             1.0 : 0.05;
+
+        // Calculate velocity to adjust blending - faster motion gets more current frame influence
+        vec2 velocity = historyUv - uv0;
+        float velocityLength = length(velocity * textureSize);
+        float velocityFactor = clamp(velocityLength / 5.0, 0.0, 1.0);
+
+        // Combine factors - favor history more for stable regions
+        float mixFactor = clamp(0.01, outOfBoundsMix, velocityFactor * stability);
 
         gl_FragColor = mix(historyColorClamped, srcColor, mixFactor);
     }
@@ -136,6 +145,14 @@ class RenderPassTAA extends RenderPassShaderQuad {
      */
     historyRenderTargets = [];
 
+    /**
+     * Controls the stability of the TAA. Higher values reduce flickering but may introduce more blur.
+     * Range: 0-10, default: 0.7
+     *
+     * @type {number}
+     */
+    stability = 0.7;
+
     constructor(device, sourceTexture, cameraComponent) {
         super(device);
         this.sourceTexture = sourceTexture;
@@ -158,6 +175,7 @@ class RenderPassTAA extends RenderPassShaderQuad {
         this.jittersId = scope.resolve('jitters');
         this.cameraParams = new Float32Array(4);
         this.cameraParamsId = scope.resolve('camera_params');
+        this.stabilityId = scope.resolve('stability');
 
         this.setup();
     }
@@ -217,6 +235,9 @@ class RenderPassTAA extends RenderPassShaderQuad {
         this.cameraParams[2] = camera._nearClip;
         this.cameraParams[3] = camera.projection === PROJECTION_ORTHOGRAPHIC ? 1 : 0;
         this.cameraParamsId.setValue(this.cameraParams);
+
+        // Set the stability factor uniform
+        this.stabilityId.setValue(this.stability * 0.01);
     }
 
     // called when the parent render pass gets added to the frame graph

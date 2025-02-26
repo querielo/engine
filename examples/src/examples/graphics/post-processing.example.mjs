@@ -247,6 +247,7 @@ assetListLoader.load(() => {
         // TAA
         cameraFrame.taa.enabled = data.get('data.taa.enabled');
         cameraFrame.taa.jitter = data.get('data.taa.jitter');
+        cameraFrame.taa.stability = data.get('data.taa.stability');
 
         // Bloom
         cameraFrame.bloom.intensity = data.get('data.bloom.enabled') ? pc.math.lerp(0, 0.1, data.get('data.bloom.intensity') / 100) : 0;
@@ -317,8 +318,9 @@ assetListLoader.load(() => {
             intensity: 50
         },
         taa: {
-            enabled: false,
-            jitter: 1
+            enabled: true,
+            jitter: 1,
+            stability: 0.7
         }
     });
 

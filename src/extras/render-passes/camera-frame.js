@@ -143,6 +143,9 @@ import { CameraFrameOptions, RenderPassCameraFrame } from './render-pass-camera-
  * the more jitter is applied to the camera, making the anti-aliasing effect more pronounced. This
  * also makes the image more blurry, and rendering.sharpness parameter can be used to counteract.
  * Defaults to 1.
+ * @property {number} stability - Controls how aggressively the TAA preserves small details.
+ * Higher values (0-10 range) reduce flickering in subpixel details but may introduce more blur.
+ * Defaults to 0.7.
  */
 
 /**
@@ -250,7 +253,8 @@ class CameraFrame {
      */
     taa = {
         enabled: false,
-        jitter: 1
+        jitter: 1,
+        stability: 0.7
     };
 
     /**
@@ -459,6 +463,11 @@ class CameraFrame {
 
         // enable camera jitter if taa is enabled
         cameraComponent.jitter = taa.enabled ? taa.jitter : 0;
+
+        // Apply stability factor for TAA if available
+        if (renderPassCamera.taaPass) {
+            renderPassCamera.taaPass.stability = taa.stability;
+        }
 
         // debug rendering
         composePass.debug = this.debug;
